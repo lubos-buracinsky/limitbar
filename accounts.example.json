@@ -22,6 +22,8 @@
       "settings": {
         "tag": "API · Search",
         "icon": "C",
+        "iconURL": "https://openai.com/favicon.ico",
+        "toolURL": "https://platform.openai.com",
         "dailyBudgetUSD": "10",
         "demo": "true"
       }
@@ -35,6 +37,7 @@
       "settings": {
         "tag": "Auth",
         "icon": "C",
+        "iconURL": "https://openai.com/favicon.ico",
         "demo": "true"
       }
     },
@@ -47,6 +50,8 @@
       "settings": {
         "tag": "API · Search",
         "icon": "A",
+        "iconURL": "https://www.anthropic.com/favicon.ico",
+        "toolURL": "https://console.anthropic.com",
         "dailyBudgetUSD": "8",
         "demo": "true"
       }
@@ -60,6 +65,7 @@
       "settings": {
         "tag": "Auth",
         "icon": "A",
+        "iconURL": "https://www.anthropic.com/favicon.ico",
         "demo": "true"
       }
     },
@@ -72,6 +78,8 @@
       "settings": {
         "tag": "API · Search",
         "icon": "G",
+        "iconURL": "https://ai.google.dev/favicon.ico",
+        "toolURL": "https://ai.google.dev",
         "gcpProject": "my-gcp-project-id",
         "demo": "true"
       }
@@ -85,6 +93,7 @@
       "settings": {
         "tag": "Auth",
         "icon": "G",
+        "iconURL": "https://ai.google.dev/favicon.ico",
         "demo": "true"
       }
     }

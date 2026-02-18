@@ -28,6 +28,17 @@ enum Provider: String, Codable, CaseIterable, Identifiable, Sendable {
             return "G"
         }
     }
+
+    var defaultFaviconURL: URL? {
+        switch self {
+        case .claude:
+            return URL(string: "https://www.anthropic.com/favicon.ico")
+        case .codex:
+            return URL(string: "https://openai.com/favicon.ico")
+        case .gemini:
+            return URL(string: "https://ai.google.dev/favicon.ico")
+        }
+    }
 }
 
 enum AccountKind: String, Codable, Sendable {
@@ -326,11 +337,62 @@ struct AccountConfig: Identifiable, Codable, Equatable, Sendable {
         settings["icon"]
     }
 
+    var iconURL: URL? {
+        for key in ["iconURL", "faviconURL", "logoURL"] {
+            if let resolved = Self.httpURL(from: settings[key]) {
+                return resolved
+            }
+        }
+
+        if let source = Self.httpURL(from: settings["toolURL"] ?? settings["website"] ?? settings["url"]),
+           let host = source.host,
+           let generated = Self.googleFaviconURL(for: host) {
+            return generated
+        }
+
+        if let domain = settings["faviconDomain"] ?? settings["domain"],
+           let generated = Self.googleFaviconURL(for: domain) {
+            return generated
+        }
+
+        return nil
+    }
+
     var compactTag: String {
         if let tag = settings["tag"], !tag.isEmpty {
             return tag
         }
         return accountKind.displayName
+    }
+
+    private static func httpURL(from raw: String?) -> URL? {
+        guard let raw else {
+            return nil
+        }
+
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            return nil
+        }
+
+        return url
+    }
+
+    private static func googleFaviconURL(for domain: String) -> URL? {
+        let trimmedDomain = domain.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDomain.isEmpty else {
+            return nil
+        }
+
+        var components = URLComponents(string: "https://www.google.com/s2/favicons")
+        components?.queryItems = [
+            URLQueryItem(name: "domain", value: trimmedDomain),
+            URLQueryItem(name: "sz", value: "64"),
+        ]
+        return components?.url
     }
 }
 

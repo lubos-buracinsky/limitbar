@@ -19,13 +19,13 @@ struct LimitbarMenuView: View {
                     if state.accounts.isEmpty {
                         EmptyConfigView(configPath: state.configPath)
                     } else {
-                        ForEach(Provider.allCases) { provider in
-                            let providerSnapshots = state.snapshots.filter { $0.provider == provider }
-                            if !providerSnapshots.isEmpty {
-                                ProviderSectionView(
+                        ForEach(WindowSection.allCases) { section in
+                            let groupedSnapshots = groupedSnapshots(for: section)
+                            if !groupedSnapshots.isEmpty {
+                                WindowSectionView(
                                     state: state,
-                                    provider: provider,
-                                    snapshots: providerSnapshots,
+                                    section: section,
+                                    groupedSnapshots: groupedSnapshots,
                                     expandedAccountIDs: $expandedAccountIDs,
                                     rowConfig: state.uiConfig.row
                                 )
@@ -110,10 +110,31 @@ struct LimitbarMenuView: View {
             return
         }
 
-        let allIDs = Set(state.snapshots.map(\.id))
+        let allIDs = Set(
+            WindowSection.allCases.flatMap { section in
+                groupedSnapshots(for: section).map(\.id)
+            }
+        )
         if force || expandedAccountIDs != allIDs {
             expandedAccountIDs = allIDs
         }
+    }
+
+    private func groupedSnapshots(for section: WindowSection) -> [WindowGroupedSnapshot] {
+        state.snapshots
+            .compactMap { snapshot in
+                let metrics = snapshot.metrics.filter { section.windows.contains($0.window) }
+                guard !metrics.isEmpty else {
+                    return nil
+                }
+                return WindowGroupedSnapshot(section: section, snapshot: snapshot, metrics: metrics)
+            }
+            .sorted { lhs, rhs in
+                if lhs.snapshot.provider == rhs.snapshot.provider {
+                    return lhs.snapshot.displayName.localizedCaseInsensitiveCompare(rhs.snapshot.displayName) == .orderedAscending
+                }
+                return lhs.snapshot.provider.rawValue < rhs.snapshot.provider.rawValue
+            }
     }
 
     private func statusColor(_ status: OverallStatus) -> Color {
@@ -130,30 +151,67 @@ struct LimitbarMenuView: View {
     }
 }
 
-private struct ProviderSectionView: View {
+private enum WindowSection: String, CaseIterable, Identifiable {
+    case daily
+    case weekly
+
+    var id: String { rawValue }
+
+    var title: String {
+        rawValue.capitalized
+    }
+
+    var windows: Set<WindowKind> {
+        switch self {
+        case .daily:
+            return [.daily, .rpd]
+        case .weekly:
+            return [.weekly]
+        }
+    }
+}
+
+private struct WindowGroupedSnapshot: Identifiable {
+    let section: WindowSection
+    let snapshot: AccountSnapshot
+    let metrics: [LimitMetric]
+
+    var id: String {
+        "\(snapshot.id)-\(section.rawValue)"
+    }
+
+    var status: OverallStatus {
+        StatusComputation.overallStatus(metrics: metrics, fallback: snapshot.overallStatus)
+    }
+}
+
+private struct WindowSectionView: View {
     @ObservedObject var state: AppState
-    let provider: Provider
-    let snapshots: [AccountSnapshot]
+    let section: WindowSection
+    let groupedSnapshots: [WindowGroupedSnapshot]
     @Binding var expandedAccountIDs: Set<String>
     let rowConfig: RowUIConfig
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(provider.displayName)
+            Text(section.title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            ForEach(snapshots) { snapshot in
+            ForEach(groupedSnapshots) { grouped in
                 DisclosureGroup(
-                    isExpanded: binding(for: snapshot.id)
+                    isExpanded: binding(for: grouped.id)
                 ) {
-                    AccountDetailView(snapshot: snapshot)
+                    AccountDetailView(snapshot: grouped.snapshot, metrics: grouped.metrics)
                         .padding(.top, 6)
                 } label: {
                     CompactAccountRow(
-                        snapshot: snapshot,
-                        icon: state.accountIcon(for: snapshot.id, provider: snapshot.provider),
-                        tag: state.accountTag(for: snapshot.id, fallbackKind: snapshot.accountKind),
+                        snapshot: grouped.snapshot,
+                        metrics: grouped.metrics,
+                        status: grouped.status,
+                        iconText: state.accountIcon(for: grouped.snapshot.id, provider: grouped.snapshot.provider),
+                        iconURL: state.accountIconURL(for: grouped.snapshot.id, provider: grouped.snapshot.provider),
+                        tag: state.accountTag(for: grouped.snapshot.id, fallbackKind: grouped.snapshot.accountKind),
                         rowConfig: rowConfig
                     )
                 }
@@ -180,19 +238,22 @@ private struct ProviderSectionView: View {
 
 private struct CompactAccountRow: View {
     let snapshot: AccountSnapshot
-    let icon: String
+    let metrics: [LimitMetric]
+    let status: OverallStatus
+    let iconText: String
+    let iconURL: URL?
     let tag: String
     let rowConfig: RowUIConfig
 
     var body: some View {
         HStack(spacing: 8) {
-            FaviconBadge(provider: snapshot.provider, iconText: icon)
+            FaviconBadge(provider: snapshot.provider, iconText: iconText, iconURL: iconURL)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(snapshot.displayName)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
-                Text(tag)
+                Text("\(snapshot.provider.displayName) · \(tag)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -210,17 +271,17 @@ private struct CompactAccountRow: View {
             CompactProgressBar(
                 ratio: utilizationRatio,
                 width: CGFloat(max(56, min(rowConfig.progressWidth, 220))),
-                tint: statusColor(snapshot.overallStatus)
+                tint: statusColor(status)
             )
         }
     }
 
     private var utilizationRatio: Double? {
-        StatusComputation.snapshotUtilizationRatio(snapshot: snapshot)
+        StatusComputation.utilizationRatio(metrics: metrics)
     }
 
     private var percentText: String {
-        guard let percent = StatusComputation.snapshotUtilizationPercent(snapshot: snapshot) else {
+        guard let percent = StatusComputation.utilizationPercent(metrics: metrics) else {
             return "--"
         }
         return "\(percent)%"
@@ -242,15 +303,16 @@ private struct CompactAccountRow: View {
 
 private struct AccountDetailView: View {
     let snapshot: AccountSnapshot
+    let metrics: [LimitMetric]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if snapshot.metrics.isEmpty {
+            if metrics.isEmpty {
                 Text(snapshot.sourceInfo.details.first ?? "No metrics available")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(snapshot.metrics) { metric in
+                ForEach(metrics) { metric in
                     MetricDetailRow(metric: metric)
                 }
             }
@@ -374,18 +436,44 @@ private struct CompactProgressBar: View {
 private struct FaviconBadge: View {
     let provider: Provider
     let iconText: String
+    let iconURL: URL?
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .fill(backgroundColor)
+                .fill(backgroundColor.opacity(0.18))
                 .frame(width: 18, height: 18)
-            Text(iconText.prefix(2))
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
+
+            iconContent
+                .frame(width: 14, height: 14)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    @ViewBuilder
+    private var iconContent: some View {
+        if let iconURL {
+            AsyncImage(url: iconURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                default:
+                    fallbackText
+                }
+            }
+        } else {
+            fallbackText
+        }
+    }
+
+    private var fallbackText: some View {
+        Text(String(iconText.prefix(2)))
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(backgroundColor)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
     }
 
     private var backgroundColor: Color {

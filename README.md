@@ -8,10 +8,15 @@ Native macOS status bar app that shows current AI limits/usage for:
 The app distinguishes account kinds (`API` vs `Subscription`) and shows `Not available` when a public API does not expose remaining limits.
 
 Rows are compact by default:
-- favicon-style badge
+- favicon badge (official provider icon by default)
 - account tag (`API · Search`, `Auth`, ...)
 - progress bar from 0-100%
 - details visible only after row expand
+
+Rows are grouped by quota window:
+- `Daily` (includes daily/RPD metrics)
+- `Weekly`
+- accounts only appear in a section when that window is relevant for the account metrics
 
 ## Run
 
@@ -34,6 +39,22 @@ export LIMITBAR_CONFIG_PATH="/absolute/path/to/accounts.json"
 ```
 
 See `accounts.example.json`.
+
+### Account icon config
+
+Per account you can override the icon source in `settings`:
+
+```json
+{
+  "settings": {
+    "iconURL": "https://openai.com/favicon.ico",
+    "toolURL": "https://platform.openai.com"
+  }
+}
+```
+
+`iconURL`/`faviconURL`/`logoURL` are used first.  
+If no explicit icon URL is set, `toolURL`/`website`/`url` or `faviconDomain`/`domain` can be used to resolve favicon automatically.
 
 ### UI config
 

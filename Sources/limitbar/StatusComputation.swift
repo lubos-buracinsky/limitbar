@@ -79,19 +79,27 @@ enum StatusComputation {
         return nil
     }
 
-    static func snapshotUtilizationRatio(snapshot: AccountSnapshot) -> Double? {
-        let ratios = snapshot.metrics.compactMap(utilizationRatio(metric:))
+    static func utilizationRatio(metrics: [LimitMetric]) -> Double? {
+        let ratios = metrics.compactMap(utilizationRatio(metric:))
         guard !ratios.isEmpty else {
             return nil
         }
         return ratios.max()
     }
 
-    static func snapshotUtilizationPercent(snapshot: AccountSnapshot) -> Int? {
-        guard let ratio = snapshotUtilizationRatio(snapshot: snapshot) else {
+    static func utilizationPercent(metrics: [LimitMetric]) -> Int? {
+        guard let ratio = utilizationRatio(metrics: metrics) else {
             return nil
         }
         return Int((ratio * 100).rounded())
+    }
+
+    static func snapshotUtilizationRatio(snapshot: AccountSnapshot) -> Double? {
+        utilizationRatio(metrics: snapshot.metrics)
+    }
+
+    static func snapshotUtilizationPercent(snapshot: AccountSnapshot) -> Int? {
+        utilizationPercent(metrics: snapshot.metrics)
     }
 
     static func aggregateUtilizationPercent(snapshots: [AccountSnapshot], mode: ProgressAggregation) -> Int? {

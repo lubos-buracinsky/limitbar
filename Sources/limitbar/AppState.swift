@@ -100,6 +100,14 @@ final class AppState: ObservableObject {
         return provider.shortLabel
     }
 
+    func accountIconURL(for accountID: String, provider: Provider) -> URL? {
+        if let config = accountConfig(for: accountID),
+           let customURL = config.iconURL {
+            return customURL
+        }
+        return provider.defaultFaviconURL
+    }
+
     func accountTag(for accountID: String, fallbackKind: AccountKind) -> String {
         if let config = accountConfig(for: accountID) {
             return config.compactTag
