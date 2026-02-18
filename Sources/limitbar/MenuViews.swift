@@ -123,13 +123,10 @@ struct LimitbarMenuView: View {
     }
 
     private func providerGroups(for section: WindowSection) -> [WindowProviderGroup] {
-        let grouped = Dictionary(grouping: state.snapshots.compactMap { snapshot -> WindowGroupedSnapshot? in
-                let metrics = snapshot.metrics.filter { section.windows.contains($0.window) }
-                guard !metrics.isEmpty else {
-                    return nil
-                }
-                return WindowGroupedSnapshot(section: section, snapshot: snapshot, metrics: metrics)
-            }, by: { $0.snapshot.provider })
+        let grouped = Dictionary(grouping: state.snapshots.map { snapshot in
+            let metrics = snapshot.metrics.filter { section.windows.contains($0.window) }
+            return WindowGroupedSnapshot(section: section, snapshot: snapshot, metrics: metrics)
+        }, by: { $0.snapshot.provider })
 
         return Provider.allCases.compactMap { provider in
             guard let snapshots = grouped[provider], !snapshots.isEmpty else {
@@ -188,7 +185,11 @@ private struct WindowGroupedSnapshot: Identifiable {
     }
 
     var status: OverallStatus {
-        StatusComputation.overallStatus(metrics: metrics, fallback: snapshot.overallStatus)
+        StatusComputation.overallStatus(metrics: metrics, fallback: .unknown)
+    }
+
+    var emptyMessage: String {
+        "No \(section.title.lowercased()) limits available for this account."
     }
 }
 
@@ -226,7 +227,11 @@ private struct WindowSectionView: View {
                         DisclosureGroup(
                             isExpanded: binding(for: grouped.id)
                         ) {
-                            AccountDetailView(snapshot: grouped.snapshot, metrics: grouped.metrics)
+                            AccountDetailView(
+                                snapshot: grouped.snapshot,
+                                metrics: grouped.metrics,
+                                emptyMessage: grouped.emptyMessage
+                            )
                                 .padding(.top, 6)
                         } label: {
                             CompactAccountRow(
@@ -330,11 +335,12 @@ private struct CompactAccountRow: View {
 private struct AccountDetailView: View {
     let snapshot: AccountSnapshot
     let metrics: [LimitMetric]
+    let emptyMessage: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if metrics.isEmpty {
-                Text(snapshot.sourceInfo.details.first ?? "No metrics available")
+                Text(emptyMessage)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {
