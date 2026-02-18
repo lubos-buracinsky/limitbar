@@ -9,7 +9,8 @@
     "row": {
       "progressWidth": 148,
       "showPercentage": true,
-      "detailsCollapsedByDefault": true
+      "detailsCollapsedByDefault": true,
+      "showAccountsWithoutWindowMetrics": true
     }
   },
   "accounts": [

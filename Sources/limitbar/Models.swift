@@ -211,21 +211,25 @@ struct RowUIConfig: Codable, Sendable, Equatable {
     var progressWidth: Int
     var showPercentage: Bool
     var detailsCollapsedByDefault: Bool
+    var showAccountsWithoutWindowMetrics: Bool
 
     init(
         progressWidth: Int = 120,
         showPercentage: Bool = true,
-        detailsCollapsedByDefault: Bool = true
+        detailsCollapsedByDefault: Bool = true,
+        showAccountsWithoutWindowMetrics: Bool = true
     ) {
         self.progressWidth = progressWidth
         self.showPercentage = showPercentage
         self.detailsCollapsedByDefault = detailsCollapsedByDefault
+        self.showAccountsWithoutWindowMetrics = showAccountsWithoutWindowMetrics
     }
 
     enum CodingKeys: String, CodingKey {
         case progressWidth
         case showPercentage
         case detailsCollapsedByDefault
+        case showAccountsWithoutWindowMetrics
     }
 
     init(from decoder: Decoder) throws {
@@ -233,6 +237,7 @@ struct RowUIConfig: Codable, Sendable, Equatable {
         self.progressWidth = try container.decodeIfPresent(Int.self, forKey: .progressWidth) ?? 120
         self.showPercentage = try container.decodeIfPresent(Bool.self, forKey: .showPercentage) ?? true
         self.detailsCollapsedByDefault = try container.decodeIfPresent(Bool.self, forKey: .detailsCollapsedByDefault) ?? true
+        self.showAccountsWithoutWindowMetrics = try container.decodeIfPresent(Bool.self, forKey: .showAccountsWithoutWindowMetrics) ?? true
     }
 }
 

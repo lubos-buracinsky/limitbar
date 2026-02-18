@@ -72,11 +72,16 @@ Configure what is visible and row bar width in `ui`:
     "row": {
       "progressWidth": 148,
       "showPercentage": true,
-      "detailsCollapsedByDefault": true
+      "detailsCollapsedByDefault": true,
+      "showAccountsWithoutWindowMetrics": true
     }
   }
 }
 ```
+
+`showAccountsWithoutWindowMetrics`:
+- `true` = show `Auth`/`API` rows even when a section has no matching limits (`--` placeholder)
+- `false` = only show rows that have limits for the given section (`Daily`/`Weekly`)
 
 ### Demo mode
 

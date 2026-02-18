@@ -123,8 +123,11 @@ struct LimitbarMenuView: View {
     }
 
     private func providerGroups(for section: WindowSection) -> [WindowProviderGroup] {
-        let grouped = Dictionary(grouping: state.snapshots.map { snapshot in
+        let grouped = Dictionary(grouping: state.snapshots.compactMap { snapshot -> WindowGroupedSnapshot? in
             let metrics = snapshot.metrics.filter { section.windows.contains($0.window) }
+            if !state.uiConfig.row.showAccountsWithoutWindowMetrics && metrics.isEmpty {
+                return nil
+            }
             return WindowGroupedSnapshot(section: section, snapshot: snapshot, metrics: metrics)
         }, by: { $0.snapshot.provider })
 
@@ -246,7 +249,19 @@ private struct WindowSectionView: View {
                         }
                         .padding(8)
                         .background(.thinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.secondary.opacity(0.08))
+                                .opacity(grouped.metrics.isEmpty ? 1 : 0)
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(
+                                    grouped.metrics.isEmpty ? Color.secondary.opacity(0.25) : Color.clear,
+                                    lineWidth: 0.8
+                                )
+                        )
                     }
                 }
             }
@@ -277,16 +292,19 @@ private struct CompactAccountRow: View {
     let rowConfig: RowUIConfig
 
     var body: some View {
+        let isPlaceholder = metrics.isEmpty
+
         HStack(spacing: 8) {
             FaviconBadge(provider: snapshot.provider, iconText: iconText, iconURL: iconURL)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(snapshot.displayName)
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(isPlaceholder ? .secondary : .primary)
                     .lineLimit(1)
                 Text(tag)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isPlaceholder ? .tertiary : .secondary)
                     .lineLimit(1)
             }
 
