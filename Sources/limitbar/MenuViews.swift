@@ -20,12 +20,12 @@ struct LimitbarMenuView: View {
                         EmptyConfigView(configPath: state.configPath)
                     } else {
                         ForEach(WindowSection.allCases) { section in
-                            let groupedSnapshots = groupedSnapshots(for: section)
-                            if !groupedSnapshots.isEmpty {
+                            let providerGroups = providerGroups(for: section)
+                            if !providerGroups.isEmpty {
                                 WindowSectionView(
                                     state: state,
                                     section: section,
-                                    groupedSnapshots: groupedSnapshots,
+                                    providerGroups: providerGroups,
                                     expandedAccountIDs: $expandedAccountIDs,
                                     rowConfig: state.uiConfig.row
                                 )
@@ -112,7 +112,9 @@ struct LimitbarMenuView: View {
 
         let allIDs = Set(
             WindowSection.allCases.flatMap { section in
-                groupedSnapshots(for: section).map(\.id)
+                providerGroups(for: section).flatMap { group in
+                    group.snapshots.map(\.id)
+                }
             }
         )
         if force || expandedAccountIDs != allIDs {
@@ -120,21 +122,26 @@ struct LimitbarMenuView: View {
         }
     }
 
-    private func groupedSnapshots(for section: WindowSection) -> [WindowGroupedSnapshot] {
-        state.snapshots
-            .compactMap { snapshot in
+    private func providerGroups(for section: WindowSection) -> [WindowProviderGroup] {
+        let grouped = Dictionary(grouping: state.snapshots.compactMap { snapshot -> WindowGroupedSnapshot? in
                 let metrics = snapshot.metrics.filter { section.windows.contains($0.window) }
                 guard !metrics.isEmpty else {
                     return nil
                 }
                 return WindowGroupedSnapshot(section: section, snapshot: snapshot, metrics: metrics)
+            }, by: { $0.snapshot.provider })
+
+        return Provider.allCases.compactMap { provider in
+            guard let snapshots = grouped[provider], !snapshots.isEmpty else {
+                return nil
             }
-            .sorted { lhs, rhs in
-                if lhs.snapshot.provider == rhs.snapshot.provider {
-                    return lhs.snapshot.displayName.localizedCaseInsensitiveCompare(rhs.snapshot.displayName) == .orderedAscending
-                }
-                return lhs.snapshot.provider.rawValue < rhs.snapshot.provider.rawValue
+            let sortedSnapshots = snapshots.sorted { lhs, rhs in
+                let lhsTag = state.accountTag(for: lhs.snapshot.id, fallbackKind: lhs.snapshot.accountKind)
+                let rhsTag = state.accountTag(for: rhs.snapshot.id, fallbackKind: rhs.snapshot.accountKind)
+                return lhsTag.localizedCaseInsensitiveCompare(rhsTag) == .orderedAscending
             }
+            return WindowProviderGroup(section: section, provider: provider, snapshots: sortedSnapshots)
+        }
     }
 
     private func statusColor(_ status: OverallStatus) -> Color {
@@ -185,10 +192,20 @@ private struct WindowGroupedSnapshot: Identifiable {
     }
 }
 
+private struct WindowProviderGroup: Identifiable {
+    let section: WindowSection
+    let provider: Provider
+    let snapshots: [WindowGroupedSnapshot]
+
+    var id: String {
+        "\(section.rawValue)-\(provider.rawValue)"
+    }
+}
+
 private struct WindowSectionView: View {
     @ObservedObject var state: AppState
     let section: WindowSection
-    let groupedSnapshots: [WindowGroupedSnapshot]
+    let providerGroups: [WindowProviderGroup]
     @Binding var expandedAccountIDs: Set<String>
     let rowConfig: RowUIConfig
 
@@ -198,26 +215,35 @@ private struct WindowSectionView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            ForEach(groupedSnapshots) { grouped in
-                DisclosureGroup(
-                    isExpanded: binding(for: grouped.id)
-                ) {
-                    AccountDetailView(snapshot: grouped.snapshot, metrics: grouped.metrics)
-                        .padding(.top, 6)
-                } label: {
-                    CompactAccountRow(
-                        snapshot: grouped.snapshot,
-                        metrics: grouped.metrics,
-                        status: grouped.status,
-                        iconText: state.accountIcon(for: grouped.snapshot.id, provider: grouped.snapshot.provider),
-                        iconURL: state.accountIconURL(for: grouped.snapshot.id, provider: grouped.snapshot.provider),
-                        tag: state.accountTag(for: grouped.snapshot.id, fallbackKind: grouped.snapshot.accountKind),
-                        rowConfig: rowConfig
-                    )
+            ForEach(providerGroups) { providerGroup in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(providerGroup.provider.displayName)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+
+                    ForEach(providerGroup.snapshots) { grouped in
+                        DisclosureGroup(
+                            isExpanded: binding(for: grouped.id)
+                        ) {
+                            AccountDetailView(snapshot: grouped.snapshot, metrics: grouped.metrics)
+                                .padding(.top, 6)
+                        } label: {
+                            CompactAccountRow(
+                                snapshot: grouped.snapshot,
+                                metrics: grouped.metrics,
+                                status: grouped.status,
+                                iconText: state.accountIcon(for: grouped.snapshot.id, provider: grouped.snapshot.provider),
+                                iconURL: state.accountIconURL(for: grouped.snapshot.id, provider: grouped.snapshot.provider),
+                                tag: state.accountTag(for: grouped.snapshot.id, fallbackKind: grouped.snapshot.accountKind),
+                                rowConfig: rowConfig
+                            )
+                        }
+                        .padding(8)
+                        .background(.thinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
                 }
-                .padding(8)
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
     }
@@ -253,7 +279,7 @@ private struct CompactAccountRow: View {
                 Text(snapshot.displayName)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
-                Text("\(snapshot.provider.displayName) · \(tag)")
+                Text(tag)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
